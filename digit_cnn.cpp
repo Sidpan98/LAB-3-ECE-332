@@ -136,7 +136,45 @@ static Tensor3D conv2d_im2col_gemm(const Tensor3D& input, const ConvLayer& layer
     // TODO:
     //   Fill matrix A using input values and zero-padding where needed.
     // -------------------------------------------------------------------------
+
+
+    // STEP 1: im2col → build matrix A of shape [HW, KKK]
+
     std::vector<float> A(static_cast<size_t>(HW) * KKK, 0.0f);
+    for (int oy = 0; oy < H; ++oy) {
+    
+        for (int ox = 0; ox < W; ++ox) {
+            
+            int row = oy * W + ox;
+    
+            int col = 0;
+            for (int ic = 0; ic < C_in; ++ic) {
+
+                for (int ky = 0; ky < K; ++ky) {
+                    for (int kx = 0; kx < K; ++kx) {
+
+                                                                            
+                        int iy = oy + ky - pad;
+
+                        int ix = ox + kx - pad;
+
+                        
+                        if (iy >= 0 && iy < H && ix >= 0 && ix < W) {
+                            A[static_cast<size_t>(row) * KKK + col] = input.at(ic, iy, ix);
+                        
+                        } else {
+                            A[static_cast<size_t>(row) * KKK + col] = 0.0f;
+                        }
+                        
+                        
+                        col++;
+                    }
+                }
+            }
+        }
+    }
+
+
 
     // -------------------------------------------------------------------------
     // STEP 2: reshape weights → matrix B of shape [KKK, C_out]
@@ -146,7 +184,30 @@ static Tensor3D conv2d_im2col_gemm(const Tensor3D& input, const ConvLayer& layer
     // TODO:
     //   Fill matrix B using layer weights.
     // -------------------------------------------------------------------------
+
+
+
+    // STEP 2: reshape weights → matrix B of shape [KKK, C_out]
     std::vector<float> B(static_cast<size_t>(KKK) * C_out, 0.0f);
+    
+    
+    for (int oc = 0; oc < C_out; ++oc) {
+    
+        int row = 0;
+        for (int ic = 0; ic < C_in; ++ic) {
+
+            for (int ky = 0; ky < K; ++ky) {
+
+
+                for (int kx = 0; kx < K; ++kx) {
+
+
+                    B[static_cast<size_t>(row) * C_out + oc] = layer.w(oc, ic, ky, kx);
+                    row++;
+                }
+            }
+        }
+    }
 
     // -------------------------------------------------------------------------
     // STEP 3: GEMM → compute Cmat = A × B
@@ -158,7 +219,27 @@ static Tensor3D conv2d_im2col_gemm(const Tensor3D& input, const ConvLayer& layer
     // TODO:
     //   Perform matrix multiplication and add bias.
     // -------------------------------------------------------------------------
+
+    // STEP 3: GEMM → compute Cmat = A × B
+
     std::vector<float> Cmat(static_cast<size_t>(HW) * C_out, 0.0f);
+
+    for (int i = 0; i < HW; ++i) {
+ 
+        for (int j = 0; j < C_out; ++j) {
+ 
+ 
+            float sum = layer.bias[j];
+            for (int k = 0; k < KKK; ++k) {
+                sum += A[static_cast<size_t>(i) * KKK + k] * B[static_cast<size_t>(k) * C_out + j];
+
+            }
+
+            
+            Cmat[static_cast<size_t>(i) * C_out + j] = sum;
+        }
+    }
+
 
     // -------------------------------------------------------------------------
     // STEP 4: reshape output → Tensor3D
@@ -171,7 +252,22 @@ static Tensor3D conv2d_im2col_gemm(const Tensor3D& input, const ConvLayer& layer
     // -------------------------------------------------------------------------
     Tensor3D output(C_out, H, W, 0.0f);
 
+    for (int oc = 0; oc < C_out; ++oc) {
+
+
+        for (int oy = 0; oy < H; ++oy) {
+            for (int ox = 0; ox < W; ++ox) {
+
+
+                output.at(oc, oy, ox) = Cmat[static_cast<size_t>(oy * W + ox) * C_out + oc];
+            }
+        }
+    }
+
+    
+    
     return output;
+
 }
 
 
@@ -405,26 +501,26 @@ Vector1D forward(const SimpleCNN64& model, const Tensor3D& input) {
         throw std::runtime_error("forward: expected input shape [1,64,64]");
     }
 
-    
+
     Tensor3D x1 = conv2d_same_pad(input, model.conv1);
     Tensor3D x2 = conv2d_im2col_gemm(input, model.conv1);
-    Tensor3D x = x1; //TODO: change this to x = x2 when you finish implementing the conv2d_im2col_gemm
+    Tensor3D x = x2; //TODO: change this to x = x2 when you finish implementing the conv2d_im2col_gemm
     compare_conv_implementations(x1,x2);
     x = relu(x);
     x = maxpool2x2_stride2(x);
 
     x1 = conv2d_same_pad(x, model.conv2);
     x2 = conv2d_im2col_gemm(x, model.conv2);
-    x = x1; //TODO: change this to x = x2 when you finish implementing the conv2d_im2col_gemm
+    x = x2; //TODO: change this to x = x2 when you finish implementing the conv2d_im2col_gemm
     compare_conv_implementations(x1,x2);
     x = relu(x);
     x = maxpool2x2_stride2(x);
 
     x1 = conv2d_same_pad(x, model.conv3);
     x2 = conv2d_im2col_gemm(x, model.conv3);
-    x = x1; //TODO: change this to x = x2 when you finish implementing the conv2d_im2col_gemm
+    x = x2; //TODO: change this to x = x2 when you finish implementing the conv2d_im2col_gemm
     compare_conv_implementations(x1,x2);
-    x = x1;
+
     x = relu(x);
     x = maxpool2x2_stride2(x);
 
@@ -642,7 +738,8 @@ DigitPrediction predict_digit_from_gray(
     int tight_eps,
     bool verbose_preprocess,
     bool save_debug_canvas,
-    const std::string& debug_canvas_path) {
+    const okay i got the camera working , but now the led idplsy is bugging it is not shouding wht enumebrs that the code is predicting it is showing random lines not even the right numbers
+    std::string& debug_canvas_path) {
 
     DigitPrediction result{};
     result.canvas64 = preprocess_roi_to_canvas_64(gray, pad, target_box_size, tight_eps, verbose_preprocess);

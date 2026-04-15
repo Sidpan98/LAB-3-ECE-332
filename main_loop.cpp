@@ -7,6 +7,38 @@
 #include "capture_digit.h"
 #include "digit_cnn.h"
 
+
+
+void write_hex_digit(const CaptureDevice& cap, int digit) {
+
+    static const unsigned char hex_patterns[] = {
+    0x3F, // 0
+    0x06, // 1
+    0x5B, // 2
+    0x4F, // 3
+    0x66, // 4
+    0x6D, // 5
+    0x7D, // 6
+    0x07, // 7
+    0x7F, // 8
+    0x6F  // 9
+    };
+
+
+    if (digit < 0 || digit > 9) return;
+
+    
+    if (cap.key_ptr) {
+
+
+        volatile unsigned int* hex_ptr = (unsigned int*)((unsigned char*)cap.key_ptr - 0x50 + 0x20);
+
+        *hex_ptr = hex_patterns[digit];
+    }
+}
+
+
+
 int main(int argc, char** argv) {
     try {
         if (argc < 2) {
@@ -50,6 +82,10 @@ int main(int argc, char** argv) {
 
             print_vector(result.log_probs, "LogSoftmax output");
             std::cout << "Predicted digit: " << result.pred << "\n";
+
+
+            write_hex_digit(cap, result.pred);
+
 
             ++iter;
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
